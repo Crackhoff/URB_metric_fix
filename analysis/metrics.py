@@ -455,17 +455,19 @@ def extract_metrics(path: str, config: dict, verbose: bool = False) -> tuple[pd.
         print(f"Testing frames: {testing_frames.shape}")
         print(f"Training frames: {training_frames.shape}")
 
+    avg_times_pre = {}
+    for id in human_ids + CAV_ids:
+        avg_times_pre[id] = before_mutation[f"agent_{id}_duration"].mean()
+
+    params = {"avg_times_pre": avg_times_pre}
+    
     if not AV_only:
         before_mutation = add_benchmark_columns(before_mutation, params)
     after_mutation = add_benchmark_columns(after_mutation, params)
     training_frames = add_benchmark_columns(training_frames, params)
     testing_frames = add_benchmark_columns(testing_frames, params)
 
-    avg_times_pre = {}
-    for id in human_ids + CAV_ids:
-        avg_times_pre[id] = before_mutation[f"agent_{id}_duration"].mean()
     
-    params = {"avg_times_pre": avg_times_pre}
 
     t_CAV = 0
     for id in CAV_ids:
