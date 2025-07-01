@@ -27,7 +27,7 @@ from utils           import clear_SUMO_files
 from utils           import print_agent_counts
 
 
-### DQN implementation: Simplified for single-step decision-making
+### Simplified single-DQN implementation for single-step decision-making
 class DQN(BaseLearningModel):
     def __init__(self, state_size, action_space_size,
                  device="cpu", eps_init=0.99, eps_decay=0.998,
@@ -217,7 +217,7 @@ if __name__ == "__main__":
     env = TrafficEnvironment(
         seed = env_seed,
         create_agents = False,
-        create_paths = False,#
+        create_paths = True,
         save_detectors_info = False,
         agent_parameters = {
             "new_machines_after_mutation": num_machines, 

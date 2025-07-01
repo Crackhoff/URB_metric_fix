@@ -17,10 +17,10 @@ import ast
 import json
 import logging
 import random
+from pathlib import Path
 
 import numpy as np
 import pandas as pd
-
 from routerl import Keychain as kc
 from routerl import TrafficEnvironment
 from tqdm import tqdm
@@ -46,7 +46,6 @@ if __name__ == "__main__":
     network = args.net
     env_seed = args.env_seed
     baseline_model = args.model
-    assert baseline_model in kc.HUMAN_MODELS, f"Model {baseline_model} not in {kc.HUMAN_MODELS}"
     print("### STARTING EXPERIMENT ###")
     print(f"Experiment ID: {exp_id}")
     print(f"Network: {network}")
@@ -56,8 +55,13 @@ if __name__ == "__main__":
     print(f"Task config: {task_config}")
     print(f"Baseline model: {baseline_model}")
 
+    # Check if baseline exists
+    baseline_dir = Path(repo_root) / "baseline_models"
+    available_models = {file.stem for file in baseline_dir.glob("*.py")}
+    assert baseline_model in available_models, \
+        f"Baseline model '{baseline_model}' not found in {baseline_dir}/. Available: {sorted(available_models)}"
+
     os.environ["KMP_DUPLICATE_LIB_OK"]="TRUE"
-    
     logging.getLogger("matplotlib").setLevel(logging.ERROR)
     random.seed(env_seed)
     np.random.seed(env_seed)
