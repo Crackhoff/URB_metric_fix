@@ -45,7 +45,7 @@ if __name__ == "__main__":
     parser.add_argument('--env-seed', type=int, default=42)
     parser.add_argument('--torch-seed', type=int, default=42)
     args = parser.parse_args()
-    ALGORITHM = "vdn"
+    ALGORITHM = "vdn_torchrl"
     exp_id = args.id
     alg_config = args.alg_conf
     env_config = args.env_conf
