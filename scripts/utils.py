@@ -80,12 +80,10 @@ def clear_SUMO_files(sumo_path, ep_path, remove_additional_files=False):
             if vehicle is not None and vehicle.attrib.get("loaded") == "0":
                 # remove the file
                 os.remove(file_path)
-                # print(f"Removed empty file: {file_path}")
             else:
                 # rename to the next file_id
                 new_file_path = os.path.join(sumo_path, f"{file_name}_{file_id}.xml")
                 os.rename(file_path, new_file_path)
-                # print(f"Renamed file {file_path} to {new_file_path}")
                 file_id += 1
         else:
             break
@@ -98,4 +96,15 @@ def clear_SUMO_files(sumo_path, ep_path, remove_additional_files=False):
                 episode = int(file.split("_")[-1].split(".")[0])
                 if episode not in episodes:
                     os.remove(os.path.join(sumo_path, file))
-                    # print(f"Removed file: {file}")
+                    
+                    
+def print_agent_counts(env):
+    print(f"""
+    ----------------------------------------------------
+                    Agents in traffic
+    ----------------------------------------------------
+    Total agents           | {len(env.all_agents)}
+    Human agents           | {len(env.human_agents)}
+    AV agents              | {len(env.machine_agents)}
+    ----------------------------------------------------
+    """)
