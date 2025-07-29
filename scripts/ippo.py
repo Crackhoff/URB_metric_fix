@@ -18,96 +18,100 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 
-from collections     import deque
 from routerl         import TrafficEnvironment
 from tqdm            import tqdm
 
 from baseline_models import BaseLearningModel
+from iql             import Network
 from utils           import clear_SUMO_files
 from utils           import print_agent_counts
 
-
-### Simplified single-DQN implementation for single-step decision-making
-class DQN(BaseLearningModel):
+### A simplified single-step actor-only PPO implementation for single-step decisions.
+class PPO(BaseLearningModel):
     def __init__(self, state_size, action_space_size,
-                 device="cpu", eps_init=0.99, eps_decay=0.998,
-                 buffer_size=256, batch_size=16, lr=0.003, 
-                 num_epochs=1, num_hidden=2, widths=[32, 64, 32]):
+                 device="cpu", batch_size=16, lr=0.003, num_epochs=4, 
+                 num_hidden=2, widths=[32, 64, 32], clip_eps=0.2, 
+                 normalize_advantage=True, entropy_coef=0.3):
         super().__init__()
         self.device = device
         self.action_space_size = action_space_size
-        self.epsilon = eps_init
-        self.eps_decay = eps_decay
-        self.memory = deque(maxlen=buffer_size)
         self.batch_size = batch_size
         self.num_epochs = num_epochs
+        self.clip_eps = clip_eps
+        self.normalize_advantage = normalize_advantage
+        self.entropy_coef = entropy_coef
 
-        self.q_network = Network(state_size, action_space_size, num_hidden, widths).to(self.device)
-        self.optimizer = optim.Adam(self.q_network.parameters(), lr=lr)
-        self.loss_fn = nn.MSELoss()
-
+        self.policy_net = Network(state_size, action_space_size, num_hidden, widths).to(self.device)
+        self.optimizer = optim.Adam(self.policy_net.parameters(), lr=lr)
+        self.softmax = nn.Softmax(dim=-1)
+        
         self.loss = list()
+        self.memory = list()
+        self.deterministic = False
 
     def act(self, state):
-        if np.random.rand() < self.epsilon:
-            action = np.random.choice(self.action_space_size)
-        else:
-            state_tensor = torch.FloatTensor(state).unsqueeze(0).to(self.device)
-            with torch.no_grad():
-                q_values = self.q_network(state_tensor)
-            action = torch.argmax(q_values).item()
+        state_tensor = torch.FloatTensor(state).unsqueeze(0).to(self.device)
+        with torch.no_grad():
+            logits = self.policy_net(state_tensor)
+            #logits = torch.clamp(logits, -10, 10)
+            #logits = (logits - logits.min()) / (logits.max() - logits.min())
+            #self.logits = logits
+            probs = self.softmax(logits)
+        dist = torch.distributions.Categorical(probs)
+        if not self.deterministic: action = dist.sample().item()
+        else: action = torch.argmax(probs).item()
         self.last_state = state
         self.last_action = action
+        self.last_log_prob = dist.log_prob(torch.tensor(action)).item()
         return action
-    
+
     def push(self, reward):
-        # All interactions are single-step, so we only store the last state, action, and reward
-        self.memory.append((self.last_state, self.last_action, reward))
-        del self.last_state, self.last_action
+        self.memory.append((self.last_state, self.last_action, self.last_log_prob, reward))
+        del self.last_state, self.last_action, self.last_log_prob
 
     def learn(self):
         if len(self.memory) < self.batch_size: return
         step_loss = list()
+
         for _ in range(self.num_epochs):
             batch = random.sample(self.memory, self.batch_size)
-            states, actions, rewards = zip(*batch)
+            states, actions, old_log_probs, rewards = zip(*batch)
             states_tensor = torch.FloatTensor(states).to(self.device)
-            actions_tensor = torch.LongTensor(actions).unsqueeze(1).to(self.device)
-            rewards_tensor = torch.FloatTensor(rewards).unsqueeze(1).to(self.device)
+            actions_tensor = torch.LongTensor(actions).to(self.device)
+            old_log_probs_tensor = torch.FloatTensor(old_log_probs).to(self.device)
+            rewards_tensor = torch.FloatTensor(rewards).to(self.device)
+            # print(f"""
+            # States: {states_tensor}, Actions: {actions_tensor},
+            # Old Log Probs: {old_log_probs_tensor}, Rewards: {rewards_tensor}
+            #       """)
 
-            current_q_values = self.q_network(states_tensor).gather(1, actions_tensor)
-            target_q_values = rewards_tensor
+            logits = self.policy_net(states_tensor)
+            probs = self.softmax(logits)
+            dist = torch.distributions.Categorical(probs)
+            new_log_probs = dist.log_prob(actions_tensor)
 
-            loss = self.loss_fn(current_q_values, target_q_values)
+            ratio = torch.exp(new_log_probs - old_log_probs_tensor)
+            #advantage = rewards_tensor
+            if self.normalize_advantage: advantage = (rewards_tensor - rewards_tensor.mean()) / (rewards_tensor.std() + 1e-8)
+            else: advantage = rewards_tensor
+
+            surr1 = ratio * advantage
+            surr2 = torch.clamp(ratio, 1 - self.clip_eps, 1 + self.clip_eps) * advantage
+            #loss = -torch.min(surr1, surr2).mean()
+            entropy = dist.entropy().mean()
+            loss = -torch.min(surr1, surr2).mean() - self.entropy_coef * entropy
+
             self.optimizer.zero_grad()
             loss.backward()
+            torch.nn.utils.clip_grad_norm_(self.policy_net.parameters(), max_norm=1.0)
             self.optimizer.step()
             step_loss.append(loss.item())
-        self.loss.append(sum(step_loss)/len(step_loss))
-        self.decay_epsilon()
 
-    def decay_epsilon(self):
-        self.epsilon *= self.eps_decay
-
-
-class Network(nn.Module):
-    def __init__(self, in_size, out_size, num_hidden, widths):
-        super(Network, self).__init__()
-        assert len(widths) == (num_hidden + 1), "DQN widths and number of layers mismatch!"
-        
-        self.input_layer = nn.Linear(in_size, widths[0])
-        self.hidden_layers = nn.ModuleList([nn.Linear(widths[x], widths[x+1]) for x in range(num_hidden)])
-        self.out_layer = nn.Linear(widths[-1], out_size)
-
-    def forward(self, x):
-        x = torch.relu(self.input_layer(x))
-        for hidden_layer in self.hidden_layers:
-            x = torch.relu(hidden_layer(x))
-        x = self.out_layer(x)
-        return x
+        self.loss.append(sum(step_loss) / len(step_loss))
+        self.memory.clear()
     
     
-# Main script to run the IQL experiment
+# Main script to run the IPPO experiment
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument('--id', type=str, required=True)
@@ -118,7 +122,7 @@ if __name__ == "__main__":
     parser.add_argument('--env-seed', type=int, default=42)
     parser.add_argument('--torch-seed', type=int, default=42)
     args = parser.parse_args()
-    ALGORITHM = "iql"
+    ALGORITHM = "ippo"
     exp_id = args.id
     alg_config = args.alg_conf
     env_config = args.env_conf
@@ -192,6 +196,9 @@ if __name__ == "__main__":
             content = f.read()
         with open(new_agents_csv_path, 'w', encoding='utf-8') as f:
             f.write(content)
+        max_start_time = pd.read_csv(new_agents_csv_path)['start_time'].max()
+    else:
+        raise FileNotFoundError(f"Agents CSV file not found at {agents_csv_path}. Please check the network folder.")
             
     num_machines = int(num_agents * ratio_machines)
     total_episodes = human_learning_episodes + training_eps + test_eps
@@ -235,7 +242,8 @@ if __name__ == "__main__":
         simulator_parameters = {
             "network_name" : network,
             "custom_network_folder" : custom_network_folder,
-            "sumo_type" : "sumo"
+            "sumo_type" : "sumo",
+            "simulation_timesteps" : max_start_time
         }, 
         plotter_parameters = {
             "phases" : phases,
@@ -270,13 +278,14 @@ if __name__ == "__main__":
     # Mutation
     env.mutation(disable_human_learning = not should_humans_adapt, mutation_start_percentile = -1)
     print_agent_counts(env)
+    obs_size = env.observation_space(env.possible_agents[0]).shape[0]
     
     # Set policies for machine agents
     for idx in range(len(env.machine_agents)):
-        env.machine_agents[idx].model = DQN(env.machine_agents[idx].action_space_size+1, env.machine_agents[idx].action_space_size, 
-                                            device=device, eps_init=eps_init, eps_decay=eps_decay,
-                                            buffer_size=buffer_size, batch_size=batch_size, lr=lr, 
-                                            num_epochs=num_epochs, num_hidden=num_hidden, widths=widths)
+        env.machine_agents[idx].model = PPO(obs_size, env.machine_agents[idx].action_space_size, 
+                                            device=device, batch_size=batch_size, lr=lr, num_epochs=num_epochs,
+                                            num_hidden=num_hidden, widths=widths, clip_eps=clip_eps,
+                                            normalize_advantage=normalize_advantage, entropy_coef=entropy_coef)
     agent_lookup = {str(agent.id): agent for agent in env.machine_agents}
     
     
@@ -305,8 +314,8 @@ if __name__ == "__main__":
     
     ### Testing phase ###
     for agent in env.machine_agents:
-        agent.model.epsilon = 0.0
-        agent.model.q_network.eval()
+        agent.model.policy_net.eval()
+        agent.model.deterministic = True
         
     pbar.set_description("Testing")
     for episode in range(test_eps):

@@ -186,7 +186,7 @@ python scripts/<script_name> --id <exp_id> --alg-conf <hyperparam_id> --env-conf
 
 where
 
-- ```<scipt_name>``` is the script you wish to run, available scripts are ```ippo_torchrl```, ```iql_torchrl```, ```mappo_torchrl```, ```vdn_torchrl``` and ```qmix_torchrl```,
+- ```<scipt_name>``` is the script you wish to run, available scripts are ```ippo_torchrl```, ```iql_torchrl```, ```mappo_torchrl```, ```vdn_torchrl```, ```qmix_torchrl```, ```iql```, ```ippo```,
 - ```<exp_id>``` is your own experiment identifier, for instance ```random_ing```, 
 - ```<hyperparam_id>``` is the hyperparameterization identifier, it must correspond to a `.json` filename (without extension) in [`config/algo_config`](config/algo_config/). Provided scripts automatically select the algorithm-specific subfolder in this directory.
 - ```<env_conf_id>``` is the environment configuration identifier. It must correspond to a `.json` filename (without extension) in [`config/env_config`](config/env_config/). It is used to parameterize environment-specific processes, such as path generation, disk operations, etc. It is **optional** and by default is set to `config1`.
@@ -196,7 +196,7 @@ where
 - ```<torch_seed>``` is reproducibility random seed for PyTorch, it is **optional** and by default is set to 42.
 
 For example, the following command runs an experiment using:
-- QMIX algorithm, hyperparameterized by `config/algo_config/qmix/config3.json`, 
+- QMIX algorithm, hyperparameterized by `config/algo_config/qmix_torchrl/config3.json`, 
 - The task specified in `config/task_config/config4.json`,
 - The environment parameterization specified in `config/env_config/config1.json` (by default),
 - Experiment identifier `sai_qmix_0`, which will be used as the folder name in `results/` to save the experiment data,

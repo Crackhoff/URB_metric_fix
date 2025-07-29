@@ -7,7 +7,11 @@ We deliver here scripts for the experiment runs. Each associated algorithm with 
 * ```qmix_torchrl.py``` uses QMIX algorithm,
 * ```vdn_torchrl.py``` uses Value Decomposition Network algorithm.
 
-We selected five most promising RL algorithms implemented in `TorchRL` applicable for the class of `URB` problems. You can tune them, adjust, hyperparameterize and modify, or create own scripts.
+Moreover, we have two independent algorithms with our custom implementations:
+* ```iql.py``` uses Independent Q-Learning,
+* ```ippo.py``` uses Independent Proximal Policy Optimization.
+
+You can tune, adjust, hyperparameterize and modify all the provided implementations, or create own scripts.
 
 Apart from RL algorithms, we provide baseline algorithms to compare with, can be used with ```baselines.py``` and model options consist:
 * **Baselines included in URB**
