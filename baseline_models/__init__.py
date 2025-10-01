@@ -1,3 +1,4 @@
+from .base import BaseLearningModel
 from .aon import AON
 from .random import Random
 

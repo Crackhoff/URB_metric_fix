@@ -1,18 +1,13 @@
 {
-    "agent_frames_per_batch" : 2,
-    "n_iters" : 5,
+    "training_eps" : 10,
 
+    "eps_init" : 0.2,
+    "eps_decay" : 0.9999,
+    "buffer_size" : 256,
+    "batch_size" : 3,
+    "lr" : 0.01,
     "num_epochs" : 1,
-    "minibatch_size" : 2,
-    "lr" : 3e-3,
-    "max_grad_norm" : 3.0,
-    "gamma" : 0.99,
-    "memory_size" : 1000,
-    "mlp_depth" : 3,
-    "mlp_cells" : 64,
-    "tau" :  0.05,
-    "eps" : 0.95,
-    "eps_init" : 0.99,
-    "eps_end" : 0.05,
-    "exploration_fraction" : 0.33
+    "num_hidden" : 1,
+    "widths" : [32, 32],
+    "update_every" : 1
 }
