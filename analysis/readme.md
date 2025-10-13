@@ -24,3 +24,11 @@ To better understand the causes of the changes in travel time, we track the _Ave
 
 We measure the _Cost of training_, expressed as the average of: $\sum_{\tau \in train}(t^\tau_a - \hat{t}^{pre}_a)$ over all agents $a$, i.e. the cumulated disturbance that CAV cause during the training period. We define $c\_{CAV}$ and $c\_{HDV}$ accordingly.
 We call an experiment _won_ by CAVs if their policy was on average faster than human drivers' behaviour. A final _winrate_ is a percentage of runs that were won by CAVs.
+
+#### Units of measurement
+---
+
+All the metrics are expressed in the following units:
+- Time: minutes
+- Distance: kilometers
+- Speed: kilometers per hour
