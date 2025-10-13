@@ -77,15 +77,14 @@ def load_general_SUMO(file) -> pd.DataFrame:
         print(f"Error parsing XML file: {file}")
         return pd.DataFrame()
 
-    # Flatten the XML into a single dictionary
+    # ----- Extract needed elements -----
+
     flat_data = {
         f"{child.tag}_{k}": v for child in root for k, v in child.attrib.items()
     }
 
-    # Convert to a single-row DataFrame
     df = pd.DataFrame([flat_data])
 
-    # keep only the columns that are needed
     REQUIRED_COLUMNS = [
         "teleports_total",
         "teleports_jam",
@@ -136,7 +135,8 @@ def load_detailed_SUMO(file: str) -> pd.DataFrame:
         print(f"Error parsing XML file: {file}")
         return pd.DataFrame()
 
-    # Extract all tripinfo elements and their attributes
+    # ----- Extract needed tripinfo elements and their attributes -----
+
     data = [trip.attrib for trip in root.findall("tripinfo")]
     df = pd.DataFrame(data)
 
@@ -188,7 +188,6 @@ def load_routeRL(file) -> pd.DataFrame:
         pd.DataFrame: A DataFrame containing the RouteRL output data.
     """
 
-    # load the csv file
     try:
         df = pd.read_csv(file)
     except FileNotFoundError:
@@ -202,8 +201,19 @@ def load_routeRL(file) -> pd.DataFrame:
     if df.empty:
         return pd.DataFrame()
 
-    # convert to numeric
-    df = df.apply(pd.to_numeric, errors="coerce")
+    # ----- Ensure numeric columns are properly typed -----
+    NUMERIC_COLUMNS = [
+        "travel_time",
+        "id",
+        "action",
+        "origin",
+        "destination",
+        "start_time",
+        "reward",
+    ]
+
+    numeric_df = df[NUMERIC_COLUMNS].apply(pd.to_numeric, errors="coerce")
+    df[NUMERIC_COLUMNS] = numeric_df
 
     return flatten_by_id(df)
 
@@ -214,6 +224,9 @@ def load_episode(results_path: str, episode: int, verbose: bool) -> pd.DataFrame
 
     This function searches for SUMO and RouteRL output files for the given episode,
     loads them using helper functions, and concatenates them horizontally.
+
+    This function can be easily extended to include detector data in the future.
+    Currently, detector data loading is commented out.
 
     Args:
         results_path (str): The path to the main results folder.
@@ -272,7 +285,7 @@ def collect_to_single_CSV(
         pd.DataFrame: A DataFrame containing the episode data. This dataframe has one row for each episode and all columns from the SUMO and RouteRL files.
     """
 
-    # Get the episodes ids from the episodes folder
+    # ----- Get the episodes ids from the episodes folder -----
     episodes_path = os.path.join(path, "episodes")
     episodes = get_episodes(episodes_path)
 
@@ -281,8 +294,8 @@ def collect_to_single_CSV(
     if verbose:
         print(f"Loading {len(episodes)} episodes...")
 
+    # ----- Each episode is loaded and merged into a single row DataFrame -----
     for i in tqdm(episodes) if verbose else episodes:
-        # add row for every episode to the DataFrame
         episode_df = load_episode(path, i, verbose)
         if not episode_df.empty:
            dfs.append(episode_df)
@@ -305,7 +318,8 @@ def collect_to_single_CSV(
 
 def plot_vector_values(df: pd.DataFrame, path: str, title: str, ylabel: str) -> None:
     """
-    Make plots of the vector metrics.
+    Make plots of the vector metrics. 
+    The plot always has episode on the x-axis and the values of all other columns on the y-axis.
 
     Args:
         df (pd.DataFrame): The DataFrame to plot.
@@ -316,7 +330,6 @@ def plot_vector_values(df: pd.DataFrame, path: str, title: str, ylabel: str) -> 
         None
     """
 
-    # make one plots with all columns of df
     plt.figure(figsize=(10, 6))
     for column in df.columns:
         if column != "episode":
@@ -366,7 +379,6 @@ def add_benchmark_columns(df: pd.DataFrame, params: dict) -> pd.DataFrame:
         if f"agent_{i}_duration" in df.columns
     })
 
-    # add the new columns to the DataFrame
     new_df = pd.DataFrame(new_columns)
     df = pd.concat([df, new_df], axis=1)
 
@@ -512,29 +524,22 @@ def extract_metrics(path, config, verbose=False):
         if len(cols) == 0:
             return np.nan
         
-        # Calculate the mean across rows (per agent) and then the mean across agents
         return df_slice[cols].mean(axis=0).mean()
 
-    # Calculate average travel times of CAVs in testing frames
     t_CAV = get_agent_avg_travel_time(testing_frames, CAV_ids)
 
-    # Calculate average travel times of all agents in training frames
     t_train = get_agent_avg_travel_time(training_frames, all_ids)
 
-    # Calculate average travel times of all agents in testing frames
     t_test = get_agent_avg_travel_time(testing_frames, all_ids)
     
     t_sumo = testing_frames["vehicleTripStatistics_duration"].mean() if "vehicleTripStatistics_duration" in testing_frames.columns else np.nan
 
     t_HDV_pre, t_pre, t_HDV_test = np.nan, np.nan, np.nan
     if not AV_only:
-        # Calculate average travel times of human drivers in before mutation frames
         t_HDV_pre = get_agent_avg_travel_time(before_mutation, human_ids)
 
-        # Calculate average travel times of all agents in before mutation frames
         t_pre = get_agent_avg_travel_time(before_mutation, all_ids)
 
-        # Calculate average travel times of human drivers in testing frames
         t_HDV_test = get_agent_avg_travel_time(testing_frames, human_ids)
 
     def get_df_mean(df_slice, column):
@@ -628,21 +633,27 @@ def extract_metrics(path, config, verbose=False):
     metrics["Effect_of_change"] = None if AV_only else safe_divide(t_HDV_pre, t_CAV)
     metrics["Effect_of_remaining"] = None if AV_only else safe_divide(t_HDV_pre, t_HDV_test)
 
-    metrics["diff_sumo_routerl"] = t_sumo - t_test
+    # Convert speed from m/s to km/h
     metrics["avg_speed_pre"] = None if AV_only else avg_speed_pre * 3.6 if not pd.isna(avg_speed_pre) else None
     metrics["avg_speed_test"] = avg_speed_test * 3.6 if not pd.isna(avg_speed_test) else None
+
+    # Convert mileage from m to km
     metrics["avg_mileage_pre"] = None if AV_only else avg_mileage_pre / 1000.0 if not pd.isna(avg_mileage_pre) else None
     metrics["avg_mileage_test"] = avg_mileage_test / 1000.0 if not pd.isna(avg_mileage_test) else None
 
-    metrics["cost_of_learning"] = to_minutes(total_cost_of_learning) # convert seconds to minutes
-    metrics["cost_of_learning_humans"] = to_minutes(cost_of_learning_humans) # convert seconds to minutes
-    metrics["cost_of_learning_CAVs"] = to_minutes(cost_of_learning_CAVs) # convert seconds to minutes
-    metrics["avg_time_lost"] = to_minutes(average_time_lost) # convert seconds to minutes
-    metrics["avg_human_time_lost"] = to_minutes(average_human_time_lost) # convert seconds to minutes
-    metrics["avg_CAV_time_lost"] = to_minutes(average_CAV_time_lost) # convert seconds to minutes
     metrics["winrate"] = winrate
+
+    # Convert time from seconds to minutes
+    metrics["cost_of_learning"] = to_minutes(total_cost_of_learning)
+    metrics["cost_of_learning_humans"] = to_minutes(cost_of_learning_humans)
+    metrics["cost_of_learning_CAVs"] = to_minutes(cost_of_learning_CAVs)
+
+    metrics["avg_time_lost"] = to_minutes(average_time_lost)
+    metrics["avg_human_time_lost"] = to_minutes(average_human_time_lost)
+    metrics["avg_CAV_time_lost"] = to_minutes(average_CAV_time_lost)
     
-    # metrics to dataframe
+    metrics["diff_sumo_routerl"] = t_sumo - t_test
+
     metrics_df = pd.DataFrame([metrics])
 
     # ----- Vector metrics -----
@@ -694,101 +705,11 @@ def extract_metrics(path, config, verbose=False):
     return metrics_df, vector_metrics_df
 
 
-def clear_SUMO_files(
-    sumo_path: str, ep_path: str, remove_additional_files: bool = False
-) -> None:
-    """
-    Clear SUMO files that are empty.
-    If remove_additional_files=True, remove also files that are not in the episodes folder.
-    Works only for the consecutive files with the same name.
-    The file naming convention is: <file_name>_<episode>.xml
-
-    This is a destructive function, it will remove files from the directory!
-
-    Args:
-        sumo_path (str): The path to the SUMO output folder.
-        ep_path (str): The path to the episodes folder.
-        remove_additional_files (bool): If True, remove additional files that are not in the episodes folder.
-    Returns:
-        None
-    """
-    file_id = 1
-    episode = 1
-
-    file_name = "detailed_sumo_stats"
-
-    while True:
-        # check if file exists
-        file_path = os.path.join(sumo_path, f"{file_name}_{episode}.xml")
-        if os.path.exists(file_path):
-            # read xml file and check if <tripinfos> is empty (no <tripinfo> elements)
-            try:
-                tree = ET.parse(file_path)
-            except ET.ParseError:
-                print(f"Error parsing XML file: {file_path}")
-                break
-            root = tree.getroot()
-            if len(root.findall("tripinfo")) == 0:
-                # remove the file
-                os.remove(file_path)
-                # print(f"Removed empty file: {file_path}")
-            else:
-                # rename to the next file_id
-                new_file_path = os.path.join(sumo_path, f"{file_name}_{file_id}.xml")
-                os.rename(file_path, new_file_path)
-                # print(f"Renamed file {file_path} to {new_file_path}")
-                file_id += 1
-        else:
-            break
-        episode += 1
-
-    file_id = 1
-    episode = 1
-
-    file_name = "sumo_stats"
-
-    while True:
-        # check if file exists
-        file_path = os.path.join(sumo_path, f"{file_name}_{episode}.xml")
-        if os.path.exists(file_path):
-            # read xml file and check if <vehicle loaded=0>
-            try:
-                tree = ET.parse(file_path)
-            except ET.ParseError:
-                print(f"Error parsing XML file: {file_path}")
-                break
-            root = tree.getroot()
-            vehicle = root.find("vehicles")
-            if vehicle is not None and vehicle.attrib.get("loaded") == "0":
-                # remove the file
-                os.remove(file_path)
-                # print(f"Removed empty file: {file_path}")
-            else:
-                # rename to the next file_id
-                new_file_path = os.path.join(sumo_path, f"{file_name}_{file_id}.xml")
-                os.rename(file_path, new_file_path)
-                # print(f"Renamed file {file_path} to {new_file_path}")
-                file_id += 1
-        else:
-            break
-        episode += 1
-    if remove_additional_files:
-        episodes = get_episodes(ep_path)
-        # remove SUMO files that are not in the episodes
-        for file in os.listdir(sumo_path):
-            if file.endswith(".xml"):
-                episode = int(file.split("_")[-1].split(".")[0])
-                if episode not in episodes:
-                    os.remove(os.path.join(sumo_path, file))
-                    # print(f"Removed file: {file}")
-
-
 RESULTS_DEFAULT_DIR = f"./results"
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Script to process experiment results and generate metrics.")
     parser.add_argument("--id", type=str, required=True, help="Experiment ID to process.")
-    parser.add_argument("--skip-clearing", type=bool, default=False, help="Skip clearing of intermediate SUMO files.")
     parser.add_argument("--skip-collecting", type=bool, default=False, help="Skip collecting episodes into the combined CSV.")
     parser.add_argument("--results-folder", type=str, default=RESULTS_DEFAULT_DIR, help="Root folder where experiment results are stored.")
     parser.add_argument("--verbose", type=bool, default=False, help="Enable verbose output.")
@@ -796,13 +717,11 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     exp_id = args.id
-    skip_clearing = args.skip_clearing
     skip_collecting = args.skip_collecting
     results_folder = args.results_folder
     verbose = args.verbose
     if verbose:
         print(f"Experiment ID: {exp_id}")
-        print(f"Skip clearing: {skip_clearing}")
         print(f"Skip collecting: {skip_collecting}")
         print(f"results folder: {results_folder}")
 
@@ -842,19 +761,6 @@ if __name__ == "__main__":
     except json.JSONDecodeError:
         print(f"Error: Could not decode JSON from {config_json_path}")
         sys.exit(1)
-
-
-    if not skip_clearing:
-        try:
-            clear_SUMO_files(
-                os.path.join(data_path, "SUMO_output"),
-                os.path.join(data_path, "episodes"),
-                True,
-            )
-            if verbose:
-                print("Successfully cleared SUMO files.")
-        except Exception as e:
-            print(f"Warning: Failed to clear SUMO files: {e}")
 
     if not skip_collecting:
         try:
