@@ -10,6 +10,8 @@ To use the analysis script, you have to provide in the command line the followin
 python analysis/metrics.py --id <exp_id> --verbose <verbose> --results-folder <results-folder> --skip-collecting <skip-collecting>
 ```
 
+that will collect the results from the experiment with identifier ```<exp_id>``` and save them in the folder ```<exp_id>/metrics/```. The ```--verbose``` flag is optional and if set to ```True``` will print additional information about the analysis process. Flag ```--results-folder``` is optional and if set to ```True``` will use the folder ```<results-folder>``` instead of the default one ```results/```. The flag ```--skip-collecting``` is optional and if set to ```True``` will skip collecting the results from the experiment into single ```.csv``` file. This operation has to be done only once, so if you are running the analysis script more than once, you can skip this step.
+
 #### Reported indicators
 ---
 
