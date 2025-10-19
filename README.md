@@ -273,13 +273,11 @@ Users can extend possible experiment configurations by adding:
 
 ## Citation
 ```
-@misc{URB,
-  author = {A. O. Akman, A. Psarou, M. Hoffmann, Ł. Gorczyca, Ł. Kowalski, P. Gora, G. Jamróz, R. Kucharski},
-  doi = {10.48550/arXiv.2505.17734},
-  month = {5},
-  title = {{Urban Routing Benchmark}},
-  url = {https://github.com/COeXISTENCE-PROJECT/URB},
-  version = {1.0.0},
-  year = {2025}
+@inproceedings{URB,
+  title={URB -- Urban Routing Benchmark for RL-equipped Connected Autonomous Vehicles},
+  author={Akman, Ahmet Onur and Psarou, Anastasia and Hoffmann, Micha{\l} and Gorczyca, {\L}ukasz and Kowalski, {\L}ukasz and Gora, Pawe{\l} and Jamr{\'o}z, Grzegorz and Kucharski, Rafa{\l}},
+  booktitle={Proceedings of the Thirty-Ninth Annual Conference on Neural Information Processing Systems (NeurIPS 2025) Datasets and Benchmarks Track},
+  month={December},
+  year={2025}
 }
 ```
